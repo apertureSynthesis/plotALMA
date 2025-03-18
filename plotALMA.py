@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.patheffects as pe
 import astropy.units as u
 from astropy.io import fits
 from astroquery.jplhorizons import Horizons
@@ -190,8 +191,11 @@ class plotALMA(object):
             ndx = dx*xscl
             ndy = dy*xscl 
             dcont = np.sqrt(ndx**2+ndy**2)
-            dcont_err = self.bmaj / min(SNR_line,SNR_cont)
-            self.delta_label = '$\delta_{cont}$ = (%d $\pm$ %d) km'%(dcont,dcont_err) 
+            dcont_err = self.bmaj / min(SNR_line,SNR_cont)[0]
+            if self.projectedDistance:
+                self.delta_label = '$\delta_{{cont}}$ = ({:d} $\pm$ {:d}) km'.format(dcont,dcont_err)
+            else:
+                self.delta_label = '$\delta_{{cont}}$ = ({:.2f} $\pm$ {:.2f}) arcsec'.format(dcont,dcont_err)
     
     def _make_plots(self):
 
@@ -218,7 +222,7 @@ class plotALMA(object):
         if (np.nanmax(self.Signal)/self.rms >= 100):
             clevels = np.arange(-1000,1100,10)
 
-        zindex = np.where(clevels == 0)
+        zindex = np.where(np.array(clevels) == 0)
         contLevels = np.delete(clevels,zindex)
         contourLevels = [x*self.rms for x in contLevels]
         strs = [str(i)+'$\sigma$' for i in contLevels]   
@@ -257,8 +261,8 @@ class plotALMA(object):
             ax.set_xlabel('Distance West (km)',fontsize=22,color='black')
             ax.set_ylabel('Distance North (km)',fontsize=22)
         else:
-            ax.set_xlabel(r'$\Delta\delta (arcsec)$')
-            ax.set_ylabel(r'$\Delta\alpha (arcsec)$')
+            ax.set_xlabel(r'$\Delta\delta$ (arcsec)')
+            ax.set_ylabel(r'$\Delta\alpha$ (arcsec)')
         ax.set_title(self.figTitle,fontsize=24,fontweight='bold')
 
         #Add illumination geometry
@@ -277,14 +281,17 @@ class plotALMA(object):
         self.psAMV = (self.psAMV.to(u.rad)).value + np.pi/2.
 
         ax.annotate("",xytext=(ac[0],ac[1]),xy=(ac[0]+r*np.cos(self.psAng),ac[1]+r*np.sin(self.psAng)),xycoords='data',textcoords='data',arrowprops=dict(color='white',headwidth=10,width=0.1))
-        ax.text(1.01*(ac[0]+r*np.cos(self.psAng)),1.01*(ac[1]+r*np.sin(self.psAng)),'S',fontsize=25,color='white')
+        solar_vector = ax.text(1.01*(ac[0]+r*np.cos(self.psAng)),1.01*(ac[1]+r*np.sin(self.psAng)),'S',fontsize=25,color='white')
+        solar_vector.set_path_effects([pe.withStroke(linewidth=4,foreground="black")])
 
         #Tail vector
         ax.annotate("",xytext=(ac[0],ac[1]),xy=(ac[0]+r*np.cos(self.psAMV),ac[1]+r*np.sin(self.psAMV)),xycoords='data',textcoords='data',arrowprops=dict(color='white',headwidth=10,width=0.1))
-        ax.text(1.01*(ac[0]+r*np.cos(self.psAMV)),1.01*(ac[1]+r*np.sin(self.psAMV)),'T',fontsize=25,color='white')
+        tail_vector = ax.text(1.01*(ac[0]+r*np.cos(self.psAMV)),1.01*(ac[1]+r*np.sin(self.psAMV)),'T',fontsize=25,color='white')
+        tail_vector.set_path_effects([pe.withStroke(linewidth=4,foreground="black")])
 
         #Add sigma label
-        ax.text(-0.85*np.abs(self.xcnt[0]),0.9*np.abs(self.xcnt[0]),self.slabel,fontsize=16,color='white',fontweight='bold')
+        sigma_text = ax.text(-0.85*np.abs(self.xcnt[0]),0.9*np.abs(self.xcnt[0]),self.slabel,fontsize=16,color='white',fontweight='bold')
+        sigma_text.set_path_effects([pe.withStroke(linewidth=4,foreground="black")])
 
         #Add a spectral plot
         if not self.plotCont:
@@ -301,7 +308,7 @@ class plotALMA(object):
 
             #Add spectral plot inset
             ax.plot(0,0,marker='+',color='black',markersize=18,markeredgewidth=3)
-            circPix = CirclePixelRegion(center=PixCoord(x=self.pcen[1],y=self.pcen[0]),radius=rpix)
+            circPix = CirclePixelRegion(center=PixCoord(x=self.pcen[0],y=self.pcen[1]),radius=rpix)
             cube = SpectralCube.read(self.lineFile)
             subcube = cube.subcube_from_regions([circPix])
             spec = subcube.sum(axis=(1,2)) / npix_beam
@@ -316,7 +323,8 @@ class plotALMA(object):
             inset.set_xlim(-5,5)
 
             #Add delta label for continuum vs. line
-            ax.text(-0.85*np.abs(self.xcnt[0]),0.80*np.abs(self.xcnt[0]),self.delta_label,fontsize=16,color='white',fontweight='bold')
+            delta_text = ax.text(-0.85*np.abs(self.xcnt[0]),0.80*np.abs(self.xcnt[0]),self.delta_label,fontsize=16,color='white',fontweight='bold')
+            delta_text.set_path_effects([pe.withStroke(linewidth=4,foreground="black")])
 
         plt.savefig(self.figName)
         plt.show()
