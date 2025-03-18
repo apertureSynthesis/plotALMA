@@ -1,0 +1,11 @@
+numpy
+pandas
+matplotlib
+astropy
+astroquery
+datetime
+spectral-cube
+regions
+jupyter
+ipython
+pylint

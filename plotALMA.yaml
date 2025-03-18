@@ -1,0 +1,14 @@
+name: plotALMA
+dependencies:
+- python=3.11
+- numpy
+- pandas
+- matplotlib
+- astropy
+- matplotlib
+- pip
+- pip:
+  - regions
+  - spectral-cube
+  - jupyter
+  - pylint
