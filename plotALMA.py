@@ -7,7 +7,7 @@ import astropy.units as u
 from astropy.io import fits
 from astroquery.jplhorizons import Horizons
 from datetime import datetime, timedelta
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Ellipse, Arc
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 from spectral_cube import SpectralCube
@@ -23,8 +23,14 @@ class plotALMA(object):
         self.figTitle = figTitle
         self.plotCont = plotCont
         self.lineFile = lineFile
-        self.vlow = vlow
-        self.vup = vup
+        if vlow != None:
+            self.vlow = vlow.to(u.km/u.s).value
+        else:
+            self.vlow = None
+        if vup != None:
+            self.vup = vup.to(u.km/u.s).value
+        else:
+            self.vup = None
         self.projectedDistance = projectedDistance
 
     def _read_files(self):
@@ -89,14 +95,9 @@ class plotALMA(object):
         #Geocentric distance, illumination fration, position angle of the Sun-comet vector,
         #position angle of the heliocentric velocity vector
         self.delta = self.df_eph['delta'][0].item()*u.au
-        self.ifrac = self.df_eph['illumination'][0].item()
+        self.ifrac = self.df_eph['illumination'][0].item()/100.
         self.psAng = self.df_eph['sunTargetPA'][0].item()*u.deg
         self.psAMV = self.df_eph['velocityPA'][0].item()*u.deg
-
-        #Size and orientation of the synthesized beam
-        self.bmaj = (self.delta.to(u.km)).value*np.tan((self.hdr['BMAJ']*u.deg).to(u.rad).value)
-        self.bmin = (self.delta.to(u.km)).value*np.tan((self.hdr['BMIN']*u.deg).to(u.rad).value)
-        self.bpa = self.hdr['BPA']
 
         #Spatial pixel scale
         self.pscl = float(self.hdr['CDELT2'])*u.deg
@@ -112,7 +113,7 @@ class plotALMA(object):
             dv *= 1./1000.
 
             #Find velocity integration range
-            vinds = np.where((v>=self.vlow) & (v<=self.vup))
+            vinds = np.where((self.v>=self.vlow) & (self.v<=self.vup))
 
         #Extract continuum signal in mJy, find photocenter, and calculate the image noise
         cdata = self.contData*1000.
@@ -157,14 +158,19 @@ class plotALMA(object):
         #in angular or projected distance units
         if self.projectedDistance:
             xscl = (self.delta.to(u.km)).value * np.tan((self.pscl.to(u.rad)).value)
-            print('xscl = ',xscl)
+            #Size and orientation of the synthesized beam
+            self.bmaj = (self.delta.to(u.km)).value*np.tan((self.hdr['BMAJ']*u.deg).to(u.rad).value)
+            self.bmin = (self.delta.to(u.km)).value*np.tan((self.hdr['BMIN']*u.deg).to(u.rad).value)
+            self.bpa = self.hdr['BPA']
         else:
             xscl = (self.pscl.to(u.arcsec)).value
+            #Size and orientation of the synthesized beam
+            self.bmaj = (self.hdr['BMAJ']*u.deg).to(u.arcsec).value
+            self.bmin = (self.hdr['BMIN']*u.deg).to(u.arcsec).value
+            self.bpa = self.hdr['BPA']
+
         #Spatial axis of the image in desired units along with extent of future image
         self.xcnt = (np.arange(0, npix, dtype=float) - nside) * xscl
-        #Offset of continuum vs line in these units
-        ndx = dx*xscl
-        ndy = dy*xscl 
 
         #Set final details for plotting
         if self.plotCont:
@@ -180,11 +186,20 @@ class plotALMA(object):
             self.Signal = lineSignal
             self.barlabel = 'Integrated Flux (mJy beam$^{-1}$ km s$^{-1}$)'
             self.slabel = '$\sigma$ = %.2f mJy beam$^{-1}$ km s$^{-1}$'%(self.rms)
+            #Offset of continuum vs line in these units
+            ndx = dx*xscl
+            ndy = dy*xscl 
             dcont = np.sqrt(ndx**2+ndy**2)
             dcont_err = self.bmaj / min(SNR_line,SNR_cont)
             self.delta_label = '$\delta_{cont}$ = (%d $\pm$ %d) km'%(dcont,dcont_err) 
     
     def _make_plots(self):
+
+        #Set some plotting options
+        matplotlib.rcParams['font.family'] = 'Times New Roman'
+        matplotlib.rcParams['mathtext.default'] = 'regular'
+        matplotlib.rcParams['font.weight'] = 'bold'
+        matplotlib.rcParams['axes.labelweight'] = 'bold'
 
         #Work out which level contours we want based on the S/N of the data at the peak pixel
         #1-sigma increments up to 5-sigma
@@ -211,12 +226,15 @@ class plotALMA(object):
         #Create figure
         fig, ax = plt.subplots(1,1,figsize=(10,10))
         fig.subplots_adjust(hspace=0.20,wspace=0.20)
+        #Make pixels outside the field black
+        current_map = matplotlib.colormaps.get_cmap(cm.CMRmap)
+        current_map.set_bad(color='black')
         #Extent of image
         extent = [self.xcnt[0],-1*self.xcnt[0],self.xcnt[0],-1*self.xcnt[0]]
-        im = ax.imshow(self.Signal,origin='lower',extent=self.extent,interpolation='none',cmap=cm.CMRmap,vmin=-1*self.rms,vmax = np.nanmax(self.Signal))
+        im = ax.imshow(self.Signal,origin='lower',extent=extent,interpolation='none',cmap=cm.CMRmap,vmin=-1*self.rms,vmax = np.nanmax(self.Signal))
 
         #Add contours and labels
-        cont = ax.contour(self.Signal,levels=contourLevels,colors='white',alpha=0.85,origin='lower',extent=self.extent,linewidths=1.5)
+        cont = ax.contour(self.Signal,levels=contourLevels,colors='white',alpha=0.85,origin='lower',extent=extent,linewidths=1.5)
         fmt = {}
         for l,s in zip(cont.levels,strs):
             fmt[l] = s
@@ -247,9 +265,12 @@ class plotALMA(object):
         #Quantities for positioning the orientation of the illumination geometry and other labels
         pwidth=self.xcnt[0]*0.20
         iwidth = pwidth*(2*self.ifrac-1)
-
         ac = [0.70*np.abs(self.xcnt[0]),-0.70*np.abs(self.xcnt[0])]
         r = 0.20*np.sqrt(ac[0]**2 + ac[1]**2)
+        ax.add_patch(Arc((ac[0],ac[1]),height=pwidth,width=pwidth,theta1=270,theta2=90,color='yellow'))
+        ax.add_patch(Arc((ac[0],ac[1]),height=pwidth,width=iwidth,theta1=90,theta2=270,color='yellow'))
+        ax.add_patch(Arc((ac[0],ac[1]),height=pwidth,width=pwidth,theta1=90,theta2=270,color='yellow',linestyle='--'))
+
         #Solar vector
         #Convert psa and ps_amv to proper units and orientation (counterclockwise from North)
         self.psAng = (self.psAng.to(u.rad)).value - np.pi/2.
@@ -288,7 +309,7 @@ class plotALMA(object):
             plt.setp(inset.spines.values(),color='white')
             plt.setp([inset.get_xticklines(), inset.get_yticklines(), inset.get_xticklabels()],color='white')
             inset.set_facecolor('black')
-            inset.plot(v,spec,drawstyle='steps-mid',color='white',linewidth=1)
+            inset.plot(self.v,spec,drawstyle='steps-mid',color='white',linewidth=1)
             inset.tick_params(axis='x',direction='in',labelsize=18)
             inset.tick_params(labelleft=False,labelbottom=True,left=False)
             inset.set_xlabel('v (km s$^{-1}$)',color='white',fontsize=18)
