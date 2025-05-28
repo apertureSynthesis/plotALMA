@@ -16,6 +16,10 @@ from regions import CirclePixelRegion, PixCoord
 
 class plotALMA(object):
 
+    """
+    Python object that plots an ALMA datacube, either spectral line and/or continuum
+    """
+
     def __init__(self,contFile,objectName,figName,figTitle,plotCont=True,lineFile=None,vlow=None,vup=None,projectedDistance=True):
 
         self.contFile = contFile
