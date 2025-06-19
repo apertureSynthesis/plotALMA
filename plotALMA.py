@@ -68,7 +68,7 @@ class plotALMA(object):
         endTime = deltaObs.strftime('%Y-%m-%d %H:%M')
 
         #Run the query to JPL/HORIZONS and store the results in a dataframe
-        obj = Horizons(id=self.objectName, id_type='designation', location='ALMA, center',
+        obj = Horizons(id=self.objectName, location='ALMA, center',
                     epochs = {'start': startTime, 'stop': endTime, 'step': '1m'})
         eph = obj.ephemerides(quantities='10,20,27', no_fragments=True, closest_apparition=True)
 
@@ -131,7 +131,7 @@ class plotALMA(object):
         SNR_cont = cdata[cmax] / contRMS
 
         #Clip the image to 25% of its width compared to the photocenter
-        nside = int(0.25*self.contData.shape[0])
+        nside = int(0.20*self.contData.shape[0])
         #Make sure there is an odd number of pixels so the photocenter is truly centered
         if (2*nside %2 == 0):
             npix = 2*nside + 1
@@ -183,21 +183,21 @@ class plotALMA(object):
             self.Signal = contSignal
             #Colorbar label and units
             self.barlabel = 'Continuum Flux (mJy beam$^{-1}$)'
-            self.slabel = '$\sigma$ = %.2f mJy beam$^{-1}$'%(self.rms)
+            self.slabel = '$\sigma$ = %.3f mJy beam$^{-1}$'%(self.rms)
             #Other labels
             self.delta_label = None
         else:
             self.rms = lineRMS
             self.Signal = lineSignal
             self.barlabel = 'Integrated Flux (mJy beam$^{-1}$ km s$^{-1}$)'
-            self.slabel = '$\sigma$ = %.2f mJy beam$^{-1}$ km s$^{-1}$'%(self.rms)
+            self.slabel = '$\sigma$ = %.3f mJy beam$^{-1}$ km s$^{-1}$'%(self.rms)
             #Offset of continuum vs line in these units
             ndx = dx*xscl
             ndy = dy*xscl 
             dcont = np.sqrt(ndx**2+ndy**2)
             dcont_err = self.bmaj / min(SNR_line,SNR_cont)[0]
             if self.projectedDistance:
-                self.delta_label = '$\delta_{{cont}}$ = ({:d} $\pm$ {:d}) km'.format(dcont,dcont_err)
+                self.delta_label = '$\delta_{{cont}}$ = ({:d} $\pm$ {:d}) km'.format(int(dcont),int(dcont_err))
             else:
                 self.delta_label = '$\delta_{{cont}}$ = ({:.2f} $\pm$ {:.2f}) arcsec'.format(dcont,dcont_err)
     
